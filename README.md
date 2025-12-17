@@ -283,5 +283,3 @@ If you love homelabs, DevOps, automation, Kubernetes, or just organized
 chaos --- you'll feel right at home.
 
 ------------------------------------------------------------------------
-
-### ✨ *Replace placeholders with your images & repo details to make it uniquely yours!* ✨
