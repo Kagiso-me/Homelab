@@ -13,7 +13,7 @@ _... managed with ArgoCD, Renovate, and GitHub Actions_ <img src="https://fonts.
 [![Discord](https://img.shields.io/discord/673534664354430999?style=for-the-badge&label&logo=discord&logoColor=white&color=blue)](https://discord.gg/home-operations)&nbsp;&nbsp;
 [![Kubernetes](https://img.shields.io/endpoint?url=https%3A%2F%2Fkromgo.turbo.ac%2Fkubernetes_version&style=for-the-badge&logo=kubernetes&logoColor=white&color=blue&label=%20)](https://kubernetes.io)&nbsp;&nbsp;
 [![Argo CD](https://img.shields.io/badge/GitOps-Argo%20CD-orange?style=for-the-badge&logo=argo&logoColor=white)](https://argo-cd.readthedocs.io/)&nbsp;&nbsp;
-[![Renovate](https://img.shields.io/github/actions/workflow/status/kagiso-me/helm-charts/renovate.yaml?branch=main&label=&logo=renovatebot&style=for-the-badge&color=blue)](https://github.com/kagiso-me/helm-charts/actions/workflows/renovate.yaml) 
+[![Renovate](https://img.shields.io/github/actions/workflow/status/Kagiso-me/helm-charts/renovate.yaml?branch=main&label=&logo=renovatebot&style=for-the-badge&color=blue)](https://github.com/Kagiso-me/helm-charts/actions/workflows/renovate.yaml) 
 
 </div>
 
