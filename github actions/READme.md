@@ -1,119 +1,138 @@
-# Kagiso Helm Charts Deployment Guide
+# Kagiso Helm Charts
 
-This guide walks you through the full Helm charts setup, workflow, and integration with your Jekyll site.
+This repository hosts **Kagiso’s Helm Charts**, a curated collection of Helm charts for self-hosted services, homelabs, and Kubernetes workloads.
 
----
-
-## 1. Directory Structure
-
-├─ .github/workflows/release.yml
-├─ .github/templates/dashboard.html
-├─ charts/
-│ ├─ chart1/
-│ └─ chart2/
-├─ .deploy/ # Temporary build folder
-└─ Kagiso-me.github.io/ # Optional Jekyll integration
-└─ _charts/
-├─ index.yaml
-└─ index.html
-
+Charts are automatically packaged and published to **GitHub Pages**, making this repository a standard Helm chart repository and compatible with **Artifact Hub**.
 
 ---
 
-## 2. Workflow Overview
+## 📦 Helm Repository
 
-The GitHub Actions workflow handles:
+**Repository URL**
 
-1. Checkout of repo
-2. Helm setup
-3. Tool installation (`yq`, `kubeval`, `kube-score`)
-4. Detect changed charts
-5. Lint & validate charts
-6. Semantic version bump
-7. Changelog automation
-8. Packaging charts
-9. Generate Helm repo index
-10. Add Artifact Hub metadata
-11. Deploy to `gh-pages` branch
-12. Optional sync to Jekyll `_charts/` folder
+```
+https://kagiso-me.github.io/helm-charts
+```
 
----
+### Add the repository
 
-## 3. Setting Up Your Charts
+```bash
+helm repo add kagiso https://kagiso-me.github.io/helm-charts
+helm repo update
+```
 
-1. Add charts under `charts/`:
-charts/
-├─ mychart/
-│ ├─ Chart.yaml
-│ ├─ values.yaml
-│ └─ templates/
+### Install a chart
 
-
-2. Include a `CHANGELOG.md` if you want historical version notes.
+```bash
+helm install my-release kagiso/<chart-name>
+```
 
 ---
 
-## 4. Deployment
+## 📁 Repository Structure
 
-- Push changes to `main`.
-- GitHub Actions will automatically:
-
-  - Validate charts
-  - Bump versions
-  - Update changelogs
-  - Package charts
-  - Update `index.yaml`
-  - Deploy to `gh-pages` for Artifact Hub
-  - Optionally sync `_charts/` folder in Jekyll site
-
----
-
-## 5. Jekyll Site Integration
-
-1. Create a page: `helm-charts/index.html`.
-2. Add JS (`assets/js/helm-charts.js`) to dynamically read `_charts/index.yaml`.
-3. Style cards using your site theme.
-4. Add a menu link to `/helm-charts/` from your main site navigation.
-
----
-
-## 6. Artifact Hub Integration
-
-- The workflow generates `artifacthub-repo.yml` in `.deploy/`.
-- Artifact Hub will detect the charts and display:
-
-  - Chart name, description, versions
-  - Installation instructions
-  - Maintainers
-  - License
-
-- Make sure your repo is registered in Artifact Hub under your account.
+```
+.
+├── charts/
+│   ├── argocd/
+│   ├── authentik/
+│   ├── crowdsec/
+│   ├── erpnext/
+│   ├── ghost/
+│   ├── immich/
+│   ├── jellyfin/
+│   ├── jellyseerr/
+│   ├── grafana/
+│   ├── mariadb/
+│   ├── nextcloud/
+│   ├── prowlarr/
+│   ├── sabnzbd/
+│   └── wordpress/
+│
+├── artifacthub-repo.yml
+├── .github/
+│   └── workflows/
+│       └── release.yml
+└── README.md
+```
 
 ---
 
-## 7. Notes
+## 🔁 Release & Publishing Workflow
 
-- Always push changes to `main`.
-- Workflow is idempotent — no need to manually bump versions or changelogs.
-- `_charts/index.yaml` is the source of truth for both Artifact Hub and Jekyll site.
+On every push to `main`:
+
+1. Helm charts are linted
+2. Charts are packaged
+3. `index.yaml` is generated
+4. Packages and index are published to the **`gh-pages` branch**
+5. GitHub Pages serves the Helm repository
+
+This repository **does not require** a `gh-pages` folder in `main`.
+The branch is created and managed automatically by GitHub Actions.
+
+---
+
+## 🌐 GitHub Pages Website (Human-Readable)
+
+The Helm repository is consumed by tooling, but documentation is provided separately via:
+
+```
+kagiso-me.github.io
+└── _charts/
+    └── index.md
+```
+
+* `_charts/index.md` is **for humans**
+* It explains how to use the Helm repo
+* It may link to Artifact Hub and GitHub
+* It is **not** used by Helm or Artifact Hub
 
 ---
 
-## 8. Customization
+## 📦 Artifact Hub
 
-- Dashboard look & feel is controlled via your Jekyll theme.
-- You can add badges, install instructions, or additional metadata using `helm-charts.js`.
-- Changelogs are automatically generated from commit messages prefixed with `feat:` or `fix:`.
+This repository is registered on **Artifact Hub**.
+
+Repository metadata is defined in:
+
+```
+artifacthub-repo.yml
+```
+
+Each chart should include appropriate annotations in `Chart.yaml`, for example:
+
+```yaml
+annotations:
+  artifacthub.io/category: Monitoring
+```
+
+> Artifact Hub **does not read** the GitHub Pages website repository.
+> It reads the Helm repository directly from `index.yaml`.
 
 ---
 
-## 9. Summary
+## 🛡 Design Principles
 
-With this setup:
+* Clear separation between:
 
-- Helm repo is automated and Artifact Hub ready.
-- Jekyll site shows charts with your theme.
-- Versions, changelogs, and packages are fully automated.
-- You have a **single source of truth** (`index.yaml`) for all charts.
+  * Helm distribution
+  * Website documentation
+* Stable, manual Artifact Hub metadata
+* Fully automated chart releases
+* Minimal CI complexity
+* No system-level package installs in CI
 
 ---
+
+## 📜 License
+
+Apache License 2.0
+
+---
+
+## 👤 Maintainer
+
+**Kagiso**
+📧 [admin@kagiso.me](mailto:admin@kagiso.me)
+🔗 [https://github.com/kagiso-me](https://github.com/kagiso-me)
