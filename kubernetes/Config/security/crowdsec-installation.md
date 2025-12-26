@@ -131,7 +131,7 @@ kubectl get pods
 
 ### Step 3: Install Firewall Bouncer on Raspberry Pi (ENFORCEMENT)
 ```bash
-sudo apt install crowdsec-firewall-bouncer-nftables -y
+sudo apt install crowdsec-firewall-bouncer
 ```
 Configure bouncer:
 ```bash
