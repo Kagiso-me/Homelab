@@ -104,8 +104,12 @@ sudo cscli metrics
 ### Step 3: Install Firewall Bouncer (Layer 3/4 Enforcement)
 
 ```bash
+<<<<<<< HEAD
 sudo apt install crowdsec-firewall-bouncer -y
 sudo systemctl enable crowdsec-firewall-bouncer
+=======
+sudo apt install crowdsec-firewall-bouncer
+>>>>>>> 30fc3aea4738a8af74f670ccff58c4d37f542d5c
 ```
 
 Generate API key:
