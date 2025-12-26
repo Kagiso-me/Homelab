@@ -15,6 +15,7 @@ services:
       # NFS-backed volumes
       - downloads_incomplete:/incomplete-downloads
       - downloads_complete:/downloads
+      - watched:/watched
     ports:
       - 8080:8080
     restart: unless-stopped
@@ -26,7 +27,12 @@ volumes:
       type: nfs
       o: addr=10.0.10.80,nfsvers=4,rw
       device: :/mnt/tera/downloads/incomplete
-
+  watched:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=10.0.10.80,nfsvers=4,rw
+      device: :/mnt/tera/downloads/watched
   downloads_complete:
     driver: local
     driver_opts:
