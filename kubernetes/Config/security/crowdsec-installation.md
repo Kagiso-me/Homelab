@@ -1,208 +1,254 @@
-## Installation & Deployment Guide
+# CrowdSec + RPi Edge Firewall Deployment Guide
+
+## 🛡️ Installation & Deployment Guide (RPi Edge + Cluster Protection)
 
 ```scss
-Internet
+🌐 Internet
    ↓
-Router (port forward)
+📡 Router (port forward 80/443 → RPi)
    ↓
-Raspberry Pi (nftables + CrowdSec bouncer)
+🖥️ Raspberry Pi 3B
+   ├─ 🔹 CrowdSec Agent (Detection + LAPI)
+   └─ 🔹 Firewall Bouncer (nftables, Layer 3/4 enforcement)
    ↓
-Kubernetes Ingress (Traefik)
+☸️ k3s Cluster (Traefik Ingress)
    ↓
-Apps (Immich, Nextcloud, Jellyfin, etc.)
+📦 Apps: Immich | Nextcloud | Jellyfin
 ```
+
 ---
 
-### Step 1: Prepare & Secure the Raspberry Pi (EDGE FIREWALL)
+### Step 1: Prepare & Harden the Raspberry Pi
+
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install nftables -y
 sudo systemctl enable nftables
 sudo systemctl start nftables
 ```
-- Set static IP and harden SSH (key-only auth). See SSH guide here.
-- Apply basic nftables firewall rules allowing SSH, HTTP/HTTPS to cluster IP.
-- *nftables* is the modern Linux firewall (replacement for iptables). CrowdSec will dynamically inject block rules into nftables.
 
-| Traffic                   | Allowed? | Why             |
-| ------------------------- | -------- | --------------- |
-| SSH (22) from your LAN    | ✅        | Admin access    |
-| HTTP (80) from internet   | ✅        | ACME / redirect |
-| HTTPS (443) from internet | ✅        | Public services |
-| Everything else           | ❌        | Attack surface  |
+* Set a **static IP** for the Pi.
+* Harden SSH (key-only login, no root password).
+* Apply baseline **nftables** rules: allow SSH from LAN, HTTP/HTTPS to cluster, block everything else.
 
-#### Create a real nftables ruleset
-Edit the nftables config:
-```bash
-sudo nano /etc/nftables.conf
-```
-#### Replace *everything* with this:
+| Traffic             | Allowed? | Why                   |
+| ------------------- | -------- | --------------------- |
+| SSH (22) from LAN   | ✅        | Admin access          |
+| HTTP/HTTPS (80/443) | ✅        | ACME + app traffic    |
+| Everything else     | ❌        | Reduce attack surface |
+
+#### nftables rules
+
 ```nft
 #!/usr/sbin/nft -f
-
 flush ruleset
 
 table inet filter {
-
   chain input {
     type filter hook input priority 0;
-    policy drop; #Default deny — if it’s not explicitly allowed, it’s blocked.
+    policy drop;
 
-    # Allow loopback
     iif lo accept
-
-    # Allow established connections
-    ct state established,related accept #Allows return traffic (otherwise the internet breaks).
-
-    # Allow SSH from LAN only
-    ip saddr 10.0.10.0/24 tcp dport 22 accept #SSH only from your home LAN — not from the internet.
-
-    # Allow HTTP & HTTPS from anywhere
-    tcp dport {80, 443} accept #Public web traffic allowed.
-
-    # Allow ICMP (ping)
+    ct state established,related accept
+    ip saddr 10.0.10.0/24 tcp dport 22 accept
+    tcp dport {80,443} accept
     ip protocol icmp accept
   }
 
-  chain forward {
-    type filter hook forward priority 0;
-    policy drop;
-  }
-
-  chain output {
-    type filter hook output priority 0;
-    policy accept;
-  }
+  chain forward { type filter hook forward priority 0; policy drop; }
+  chain output  { type filter hook output  priority 0; policy accept; }
 }
-
 ```
-#### Apply & test firewall:
+
+Apply & verify:
+
 ```bash
 sudo nft -f /etc/nftables.conf
 sudo nft list ruleset
 ```
+
 ---
 
-### Step 2: Install CrowdSec Agent in Cluster (DETECTION)
+### Step 2: Install CrowdSec Agent (Detection + LAPI)
 
-#### What runs in the cluster?
-    CrowdSec agent
-        → Watches logs (Traefik, apps)
-
-    LAPI (Local API)
-        → Exposes ban decisions to the Pi
-
-    The cluster detects, the Pi blocks.
-
-
-
-1. Add Helm repo:
 ```bash
-helm repo add crowdsec https://crowdsecurity.github.io/helm-charts
-helm repo update
+# Add CrowdSec repo
+curl -s https://packagecloud.io/install/repositories/crowdsec/crowdsec/script.deb.sh | sudo bash
+sudo apt install crowdsec -y
+sudo systemctl enable crowdsec
+sudo systemctl start crowdsec
 ```
 
-2. Create `values.yaml`:
+Minimal config (`/etc/crowdsec/config.yaml`):
+
 ```yaml
-agent:
-  enabled: true          # Run CrowdSec agent in cluster
-  name: cluster-agent    # Agent name
-  logLevel: info         # Normal verbosity
-  parsers:
-    enabled: true        # Enable parsing for logs (HTTP, auth, etc)
-  scenarios:
-    enabled: true        # Enable detection scenarios (bruteforce, scans)
-lapi:
-  enabled: true          # Enable API for Pi bouncer
-  listenUri: "http://0.0.0.0:8080"
-  apiKey: "<generate-with-cscli>"
+log:
+  level: info
+  dir: /var/log/crowdsec
+
+daemonize: true
+pid_dir: /var/run/
+api:
+  listen_uri: "http://127.0.0.1:8080"
 ```
-Why LAPI is enabled:
-Your Pi bouncer needs a single API endpoint to ask:
 
-“Is this IP banned?”
+Start agent:
 
-3. Deploy:
 ```bash
-helm install crowdsec crowdsec/crowdsec-agent -f values.yaml
-kubectl get pods 
+sudo systemctl restart crowdsec
+sudo cscli metrics
 ```
+
 ---
 
-### Step 3: Install Firewall Bouncer on Raspberry Pi (ENFORCEMENT)
+### Step 3: Install Firewall Bouncer (Layer 3/4 Enforcement)
+
 ```bash
-sudo apt install crowdsec-firewall-bouncer-nftables -y
+sudo apt install crowdsec-firewall-bouncer -y
+sudo systemctl enable crowdsec-firewall-bouncer
 ```
-Configure bouncer:
+
+Generate API key:
+
 ```bash
-sudo nano /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+sudo cscli bouncers add rpi-bouncer
 ```
+
+Configure bouncer (`/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml`):
 
 ```yaml
 mode: nftables
-api_key: "<same-key-as-lapi>"
-url: "http://<cluster-lb-ip>:8080"  #MetalLB-assigned Service IP of the CrowdSec LAPI service
+api_key: "<API_KEY_FROM_CSCLI>"
+api_url: "http://127.0.0.1:8080/"
+pid_dir: /var/run/
+update_frequency: 10s
+daemonize: true
+log_mode: file
+log_dir: /var/log/
+log_level: info
+deny_action: DROP
+supported_decisions_types:
+  - ban
+
+nftables:
+  ipv4:
+    enabled: true
+    set-only: false
+    table: crowdsec
+    chain: crowdsec-chain
 ```
-Enable and start:
+
+Start bouncer:
+
 ```bash
-sudo systemctl enable crowdsec-firewall-bouncer
-sudo systemctl start crowdsec-firewall-bouncer
+sudo systemctl restart crowdsec-firewall-bouncer
 sudo journalctl -u crowdsec-firewall-bouncer -f
 sudo cscli decisions list
 ```
 
 ---
 
-### Step 4: Configure Log Sources in Cluster
-CrowdSec is useless without logs.
+### Step 4: Forward Traffic to k3s Cluster
 
-- Traefik access logs:
+* Router: forward **80/443 → Pi IP**
+* NAT on Pi to pass allowed traffic to Traefik NodePort:
+
+```nft
+table ip nat {
+  chain prerouting {
+    type nat hook prerouting priority 0;
+    tcp dport {80,443} dnat to <cluster-ip>:<nodeport>
+  }
+  chain postrouting {
+    type nat hook postrouting priority 100;
+    oif <lan-interface> masquerade
+  }
+}
+```
+
+* CrowdSec automatically drops malicious IPs.
+
+---
+
+### Step 5: Configure Logs & Detection
+
+* Traefik logs JSON for detection:
+
 ```yaml
 additionalArguments:
   - "--accesslog=true"
   - "--accesslog.format=json"
 ```
-This enables:
 
- - Bruteforce detection
- - Path scanning detection
- - Rate abuse detection
+* Detects brute force, scanners, rate abuse.
 
 ---
 
-### Step 5: Test & Validate
-- Normal access → allowed
-- Simulated failed login → banned by bouncer
-- Confirm uploads for Immich / Nextcloud unaffected.
+### Step 6: Test & Validate
 
-    1. Trigger multiple failed logins
-    2. Check CrowdSec:
+1. Trigger failed login → CrowdSec bans IP.
+2. Check decisions & rules:
 
-```bash
-kubectl logs <crowdsec-pod>
-```
-    3. Check Pi:
-    
 ```bash
 sudo cscli decisions list
-```    
+sudo nft list ruleset
+```
+
+3. Confirm legitimate uploads work.
+
 ---
 
-### Step 6: Monitoring & Maintenance
-- node_exporter on Pi for Prometheus metrics
-- Optional: Uptime Kuma
-- Update OS and CrowdSec weekly:
+### Step 7: Optional Authentik (Layer 7 Access Control)
+
+* Authentik handles **SSO, MFA, user authentication**.
+* Lightweight SQLite recommended for Pi 3B.
+
+---
+
+### Step 8: Monitoring & Maintenance
+
+* Metrics: `node_exporter` → Prometheus
+* Optional: Uptime Kuma
+* Weekly updates:
+
 ```bash
 sudo apt update && sudo apt upgrade -y
 cscli update
 cscli hub update
 ```
-- Backup Pi firewall rules and bouncer config
 
-#### Maintenance:
+* Backup configs:
 
-| Task                 | Why                   |
-| -------------------- | --------------------- |
-| OS updates           | Kernel & nft fixes    |
-| CrowdSec hub update  | New attack signatures |
-| Backup nftables.conf | Disaster recovery     |
+```bash
+sudo cp /etc/nftables.conf ~/nftables.conf.backup
+sudo cp /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml ~/bouncer.yaml.backup
+```
+
+| Task                | Why                   |
+| ------------------- | --------------------- |
+| OS updates          | Kernel & nft fixes    |
+| CrowdSec hub update | New attack signatures |
+| Backup configs      | Disaster recovery     |
+
+---
+
+### 🌟 Architecture Diagram
+
+```
+🌐 Internet
+   │
+📡 Router (port forward 80/443 → RPi)
+   │
+🖥️ Raspberry Pi 3B
+ ├─ 🔹 CrowdSec Agent + LAPI
+ └─ 🔹 Firewall Bouncer (nftables)
+   │
+☸️ k3s Cluster (Traefik Ingress)
+   │
+📦 Apps: Immich | Nextcloud | Jellyfin
+```
+
+* **Pi**: detection + network enforcement
+* **Cluster**: apps only
+* **Traffic flow**: malicious IPs blocked before hitting apps
+* **Authentik**: optional Layer 7 auth only
