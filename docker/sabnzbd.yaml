@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Africa/Johannesburg
+    volumes:
+      # Local config (recommended)
+      - /opt/docker/sabnzbd/config:/config
+
+      # NFS-backed volumes
+      - downloads_incomplete:/incomplete-downloads
+      - downloads_complete:/downloads
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+
+volumes:
+  downloads_incomplete:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=10.0.10.80,nfsvers=4,rw
+      device: :/mnt/tera/downloads/incomplete
+
+  downloads_complete:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=10.0.10.80,nfsvers=4,rw
+      device: :/mnt/tera/downloads/complete

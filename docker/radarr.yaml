@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Africa/Johannesburg
+    volumes:
+      # Local config (recommended)
+      - /opt/docker/radarr/config:/config
+
+      # NFS-backed media + downloads
+      - movies:/movies
+      - downloads_complete:/downloads
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+
+volumes:
+  movies:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=10.0.1.10,nfsvers=4,rw
+      device: :/mnt/tera/media/movies
+
+  downloads_complete:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=10.0.1.10,nfsvers=4,rw
+      device: :/mnt/tera/downloads/complete
