@@ -210,14 +210,14 @@ At this point:
 ✅ Phase Validation Checklist
 
 Do NOT proceed unless all are true:
- Firewall logs visible on security node
- Syslog timestamps are correct
- CrowdSec parses logs
- Scenarios trigger on test attacks
- Decisions appear in cscli
- Fail2ban bans locally
- No LAN false positives
- Router CPU stable
+ - ✔ Firewall logs visible on security node
+ - ✔ Syslog timestamps are correct
+ - ✔ CrowdSec parses logs
+ - ✔ Scenarios trigger on test attacks
+ - ✔ Decisions appear in cscli
+ - ✔ Fail2ban bans locally
+ - ✔ No LAN false positives
+ - ✔ Router CPU stable
 
 ---
 
