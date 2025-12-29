@@ -158,64 +158,11 @@ Verify externally:
 ```bash
 nmap -Pn your.public.ip
 ```
-
 ---
 
-## 5️⃣ TLS Everywhere
+## 5️⃣ Logging & Time
 
-### 5.1 HTTPS Enforcement
-
-Ensure all services redirect HTTP → HTTPS.
-
-Recommended:
-- HSTS enabled
-- TLS 1.2+ only
-- Valid certificates (Let’s Encrypt or internal CA)
-
-### 5.2 Disable Weak Ciphers
-
-At the reverse proxy level:
-- Disable TLS 1.0 / 1.1
-- Prefer ECDHE + AES-GCM or ChaCha20
-
----
-
-## 6️⃣ Secrets Hygiene (Host-Level)
-
-### 6.1 Avoid Plaintext Secrets
-
-Avoid:
-- Passwords in shell history
-- Credentials in config files
-- Secrets committed to Git
-
-Prefer:
-- `.env` files with restricted permissions
-- Environment variables
-- OS-level secret stores
-
-Example:
-
-```bash
-chmod 600 .env
-```
-
-### 6.2 Git Hygiene
-
-Add to `.gitignore`:
-
-```gitignore
-.env
-*.env
-secrets/
-values-prod.yaml
-```
-
----
-
-## 7️⃣ Logging & Time
-
-### 7.1 Persistent Logging
+### 5.1 Persistent Logging
 
 Ensure logs are retained:
 
@@ -225,7 +172,7 @@ journalctl --disk-usage
 
 Confirm log rotation is enabled.
 
-### 7.2 Time Synchronization
+### 5.2 Time Synchronization
 
 ```bash
 timedatectl set-ntp true
@@ -235,7 +182,7 @@ Accurate time is **critical for security investigations**.
 
 ---
 
-## 8️⃣ Fail2Ban (Optional but Recommended)
+## 6️⃣ Fail2Ban (Optional but Recommended)
 
 Install:
 
@@ -255,16 +202,16 @@ Protects:
 
 ---
 
-## 9️⃣ Backups (Non-Negotiable)
+## 7️⃣ Backups (Non-Negotiable)
 
-### 9.1 System Configuration
+### 7.1 System Configuration
 
 Back up at minimum:
 - `/etc`
 - Reverse proxy configs
 - Application configuration directories
 
-### 9.2 Application Data
+### 7.2 Application Data
 
 Ensure:
 - Databases are dumped regularly
@@ -284,8 +231,6 @@ Test restores regularly.
 - [ ] SSH key-only access
 - [ ] Firewall deny-by-default
 - [ ] Only 80/443 exposed publicly
-- [ ] TLS enforced everywhere
-- [ ] Secrets removed from repos
 - [ ] Logs retained
 - [ ] Time synchronized
 - [ ] Backups tested
@@ -300,7 +245,7 @@ Test restores regularly.
   - Centralized logging
   - Alerting
 
-Kubernetes hardening is intentionally documented separately.
+Note: Kubernetes hardening is intentionally documented separately.
 
 ---
 
