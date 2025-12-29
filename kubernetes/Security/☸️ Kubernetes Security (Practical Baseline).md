@@ -142,6 +142,8 @@ This ensures:
  - Secrets are scoped
  - Tokens expire automatically
 
+---
+
 ## 7️⃣ Create a SecretStore in Kubernetes
 
 ```yaml
@@ -162,6 +164,8 @@ spec:
           role: myapp
 ``` 
 This tells Kubernetes how to talk to Vault.
+
+---
 
 ## 8️⃣ Create an ExternalSecret
 
@@ -191,6 +195,8 @@ Result:
  - Automatically refreshed
  - Never committed to Git
 
+---
+
 ## 9️⃣ Use the Secret in a Pod
 
 ```yaml
@@ -204,6 +210,8 @@ env:
 From the application’s perspective:
  - This is just a normal environment variable
  - No Vault logic inside the app
+
+---
 
  ## 10️⃣ Pod Security (Minimal but Effective)
  Every workload should, at minimum, enforce:
@@ -219,6 +227,8 @@ securityContext:
       - ALL
 ``` 
 This removes the most common container escape paths.
+
+---
 
  ## 11️⃣ Namespace-Level Hygiene
  Keep it simple:
