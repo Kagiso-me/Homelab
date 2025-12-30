@@ -1,7 +1,40 @@
 # 🥉 Phase 1 — Baseline Hardening (Security Level: 3/10)
 
-This guide covers **host-level and edge security hardening** for a self-hosted Linux environment.
-It intentionally **excludes Kubernetes-specific steps**, which are documented in a separate guide.
+This phase establishes **foundational security controls** for the **most critical node in the environment**: the **edge node**.
+
+---
+
+## 🧭 Environment Context (Read This First)
+
+Before applying any commands, it’s important to understand **what is being hardened, where, and why**.
+
+### 🛡️ The Sentinel Node (Edge / Gateway)
+
+**Sentinel** is a **Raspberry Pi** that functions as the **edge node** and primary security boundary for the environment.
+
+It serves as:
+
+- Internet-facing entry point  
+- Reverse proxy for HTTP/HTTPS traffic  
+- Firewall and traffic enforcement boundary  
+- Log and security telemetry intake node  
+- The **only host directly exposed to the public internet**
+
+> Every external request enters the environment through Sentinel.  
+> If Sentinel is compromised, all downstream systems become reachable.
+
+This makes Sentinel:
+- The **highest-risk node**
+- The **highest-value target**
+- The **first place attackers probe**
+
+---
+
+**Phase 1 focuses exclusively on host-level and edge hardening**, because:
+
+- Detection without prevention creates noise
+- Kubernetes / Docker security is meaningless if the edge is weak
+- Most real-world breaches begin with exposed services, SSH, or firewall misconfigurations
 
 ---
 
@@ -13,9 +46,17 @@ Establish strong **baseline security hygiene** with minimal operational complexi
 - Enforce least privilege
 - Eliminate common misconfigurations
 - Make compromise harder and noisier
-- Prepare the foundation for detection and monitoring
+- Prepare the foundation for monitoring and detection
 
-This phase focuses on **servers, SSH, firewalls, networking, TLS, logging, and backups**.
+This phase focuses on:
+
+- Operating system hardening
+- SSH security
+- Firewall configuration
+- Network exposure
+- TLS enforcement
+- Logging and time integrity
+- Backups
 
 ---
 
