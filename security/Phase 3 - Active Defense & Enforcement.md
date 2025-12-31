@@ -1,9 +1,8 @@
 # 🥇 Phase 3 — Active Defense & Enforcement
 #### **Security Level:** 7 / 10
 
-✅ **Phase 1 hardened the host.**
-
-✅ **Phase 2 gave us visibility.**
+✅ **Phase 1** ⇒ Hardened the host.
+✅ **Phase 2** ⇒ Gave us visibility.
 
 **Phase 3 is where the environment starts fighting back.**
 
@@ -239,3 +238,8 @@ After Phase 3 you have:
 - A defensible perimeter
 
 **Security Level Achieved:** ⭐⭐⭐⭐⭐⭐⭐☆☆☆ (7 / 10)
+
+---
+⬅️ Previous: [Phase 2 - Perimeter Awareness](Phase 2 - Perimeter Awareness.md)  
+➡️ Next: [Phase 4 - Identity & Zero Trust](Phase 4 - Identity & Zero Trust.md)
+---

@@ -1,7 +1,7 @@
 # 🥈 Phase 2 — Perimeter Awareness
 #### Security Level: 5 / 10
 
-Phase 1 hardened the operating system and reduced the attack surface.
+✅ **Phase 1** ⇒ Hardened the OS and reduced the attack surface.
 
 Phase 2 assumes:
 - The host OS is hardened
@@ -264,3 +264,8 @@ After Phase 2 you have:
 
 
 **Security Level Achieved:** ⭐⭐⭐⭐⭐☆☆☆☆☆ (5/10) 
+
+---
+⬅️ Previous: [Phase 1 - Baseline Hardening](Phase 1 - Baseline Hardening.md)  
+➡️ Next: [Phase 3 - Active Defense & Enforcement](Phase 3 - Active Defense & Enforcement.md)
+---

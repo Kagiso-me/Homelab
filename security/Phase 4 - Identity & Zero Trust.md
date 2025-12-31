@@ -3,11 +3,9 @@
 
 ---
 
-## 📖 About This Phase
-
-Phase 1 hardened the hosts.  
-Phase 2 gave us visibility.  
-Phase 3 gave us enforcement.
+✅ **Phase 1** ⇒ Hardened the hosts.  
+✅ **Phase 2** ⇒ Gave us visibility.  
+✅ **Phase 3** ⇒ Gave us enforcement.
 
 **Phase 4 removes implicit trust entirely.**
 
@@ -312,3 +310,8 @@ Phase 5 moves Zero Trust **inside the cluster**:
 But Phase 4 is the turning point.
 
 > *“Internal” no longer means “trusted”.*
+
+---
+⬅️ Previous: [Phase 3 - Active Defense & Enforcement](Phase 3 - Active Defense & Enforcement.md)  
+➡️ Next: [Baseline Hardening](02-baseline-hardening.md)
+---
