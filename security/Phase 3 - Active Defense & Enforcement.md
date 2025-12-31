@@ -240,6 +240,6 @@ After Phase 3 you have:
 **Security Level Achieved:** ⭐⭐⭐⭐⭐⭐⭐☆☆☆ (7 / 10)
 
 ---
-⬅️ Previous: [Phase 2 - Perimeter Awareness](Phase 2 - Perimeter Awareness.md)  
-➡️ Next: [Phase 4 - Identity & Zero Trust](Phase 4 - Identity & Zero Trust.md)
+⬅️ Previous: [Phase 2 - Perimeter Awareness](Phase-2---Perimeter-Awareness.md)  
+➡️ Next: [Phase 4 - Identity & Zero Trust](Phase-4---Identity-&-Zero-Trust.md)
 ---

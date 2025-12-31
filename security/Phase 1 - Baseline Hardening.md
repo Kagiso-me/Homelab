@@ -296,5 +296,5 @@ Solid foundation. Ready for visibility tooling.
 
 ---
 ⬅️ Previous: [Security-First Homelab Architecture](READme.md)  
-➡️ Next: [Phase 2 - Perimeter Awareness](Phase 2 - Perimeter Awareness.md)
+➡️ Next: [Phase 2 - Perimeter Awareness](Phase-2---Perimeter-Awareness.md)
 ---

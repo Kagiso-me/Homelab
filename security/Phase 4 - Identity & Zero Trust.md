@@ -1,4 +1,4 @@
-# 🥇 Phase 4 — Identity & Zero Trust
+# 🥇 Phase 4 — Identity & Zero Trust  
 #### Security Level: 8 / 10
 
 ---
@@ -7,108 +7,74 @@
 ✅ **Phase 2** ⇒ Gave us visibility.  
 ✅ **Phase 3** ⇒ Gave us enforcement.
 
-**Phase 4 removes implicit trust entirely.**
+## 🧠 Context: What Changes in Phase 4
 
-This is the phase where the network officially stops being a security boundary and **identity becomes the control plane**.
+Up to Phase 3, security decisions were based on:
+- Network location
+- IP reputation
+- Observed behavior
 
-This document is written to be:
-- Readable end-to-end
-- Referenced later without confusion
-- Understood by engineers who are *new* to identity
-- Useful to engineers who are *already familiar* with Zero Trust
+That model breaks down when:
+- Users move between networks
+- VPNs flatten trust boundaries
+- Internal services are exposed
+- Attackers operate *inside* the network
 
-Nothing is assumed. Everything is explained.
+Phase 4 introduces a **deliberate shift**:
 
----
+> **The network no longer grants trust.  
+> Identity does.**
 
-## 🧠 Why Phase 4 Exists
-
-Traditional security models assume:
-
-> “If you are on the internal network, you are trusted.”
-
-That assumption no longer holds.
-
-Modern realities:
-- Laptops move between networks
-- VPNs collapse trust boundaries
-- Internal services get exposed accidentally
-- Attackers live *inside* networks once breached
-
-**Zero Trust starts with a single, uncomfortable truth:**
-
-> *The network cannot be trusted — even your own.*
-
-Phase 4 is about designing security around that truth.
+This is the core Zero Trust idea.
 
 ---
 
 ## 🎯 Phase Goal
 
-Replace **network-based trust** with **identity-based access**.
+Replace **implicit network trust** with **explicit identity‑based access**.
 
-By the end of this phase:
+By the end of Phase 4:
 
-- No service is reachable without authentication
-- Internal and external access behave identically
-- Every request is evaluated against identity and policy
+- No service is accessible without authentication
+- LAN and WAN access behave identically
+- Access is evaluated per‑user and per‑service
 - MFA protects sensitive access
-- CrowdSec and identity reinforce each other
+- CrowdSec shields the identity layer from abuse
 
-This phase does not add more firewalls.
-
-It changes **what trust means**.
+If being “on the LAN” still grants access, Phase 4 is **not complete**.
 
 ---
 
 ## 🔐 Scope
 
-**Applies to:**
-- Web applications
-- Dashboards and admin panels
-- APIs exposed via reverse proxy
+**In scope:**
 - Human access to services
+- Web UIs and dashboards
+- Reverse‑proxied applications
+- Administrative tooling
 
 **Out of scope (for now):**
 - Kubernetes workload identity
-- Service mesh
-- Machine-to-machine auth
+- Service‑to‑service auth
+- Mesh‑based identity
 
-Those come later.
-
----
-
-## 🧱 Core Zero Trust Principles
-
-These principles guide every decision in this phase.
-
-1. **Never trust the network**
-2. **Always authenticate**
-3. **Authorize explicitly**
-4. **Assume breach**
-5. **Minimize standing access**
-
-If a tool or shortcut violates these principles, it is rejected.
+Those are addressed in Phase 5.
 
 ---
 
-## 🗺️ The New Access Model (Conceptual)
+## 🗺️ The Phase 4 Access Model
 
-Under Zero Trust, access follows this flow:
+Under Zero Trust, access follows this path:
 
 ```
 User
-  ↓
-Reverse Proxy
-  ↓
-Identity Provider (Authentication + MFA)
-  ↓
-Policy Decision
-  ↓
-Service (Allowed or Denied)
+ → Reverse Proxy (Traefik)
+ → Identity Provider (Authentik)
+ → Policy Decision
+ → Service (Allow / Deny)
 ```
 
-Key shift:
+Key change:
 
 > **Services no longer decide who can access them.**
 
@@ -116,187 +82,264 @@ They delegate that responsibility to identity.
 
 ---
 
-## 1️⃣ Introducing the Identity Provider (IdP)
+## 1️⃣ Choosing an Identity Provider (Decision Explained)
 
-An **Identity Provider (IdP)** is the system responsible for:
+Before implementation, we must choose an Identity Provider (IdP).
 
-- Verifying who a user is
-- Enforcing MFA
-- Issuing short-lived identity assertions
-- Evaluating access policies
+### What an IdP Must Provide
 
-In Phase 4, the IdP becomes the **source of truth for access**.
+At minimum:
 
-Common examples:
-- Authentik
-- Keycloak
-- Authelia
+- Central authentication
+- MFA support (TOTP / WebAuthn)
+- Policy‑based authorization
+- Reverse proxy integration
+- Clear audit logging
 
-This guide uses **Authentik** as the reference implementation, but the concepts apply universally.
+Anything less is not Zero Trust.
 
 ---
 
-## 2️⃣ Why Identity Sits in Front of Services
+### Common Self‑Hosted Options
 
-Historically, applications handled:
-- Login pages
-- Password storage
-- Sessions
-- Authorization logic
-
-This led to:
-- Inconsistent security
-- Repeated mistakes
-- Weak implementations
-
-Phase 4 removes identity responsibility from applications entirely.
-
-Applications should:
-- Trust headers
-- Focus on business logic
-- Never see passwords
-
-Identity becomes **centralized, audited, and consistent**.
+| IdP | Strengths | Weaknesses |
+|---|---|---|
+Authentik | Modern, proxy‑native, flexible policies | Learning curve |
+Keycloak | Extremely powerful, enterprise‑grade | Heavy and complex |
+Authelia | Lightweight and simple | Limited policy depth |
+OAuth‑only | Easy | Not Zero Trust by default |
 
 ---
 
-## 3️⃣ The Reverse Proxy Becomes an Identity Gateway
+### ✅ Selected Option: **Authentik**
 
-Your reverse proxy already controls traffic flow.
+We choose **Authentik** because:
 
-In Phase 4, it gains a second role:
+- It is designed for self‑hosted environments
+- It integrates cleanly with Traefik
+- Its policy model matches Zero Trust thinking
+- MFA is first‑class
+- Auditability is excellent
 
-> **Identity-aware gateway**
-
-For every incoming request, the proxy asks:
-
-> “Who is this user, and are they allowed here?”
-
-This is achieved using **Forward Authentication**.
+This guide uses Authentik, but the architecture applies broadly.
 
 ---
 
-## 4️⃣ Forward Authentication Explained
+## 2️⃣ Roles & Responsibilities (Clear Separation)
 
-Forward authentication works step-by-step:
+Each component has a single responsibility:
+
+| Component | Responsibility |
+|---|---|
+Traefik | Enforces access decisions |
+Authentik | Makes identity & policy decisions |
+Applications | Provide functionality only |
+CrowdSec | Blocks hostile traffic *before* identity |
+
+If any component crosses responsibilities, complexity explodes.
+
+---
+
+## 3️⃣ Where Identity Lives (Placement Matters)
+
+Authentik must:
+
+- Be reachable by Traefik
+- Be protected by TLS
+- Never be exposed directly
+
+**Recommended placement:**
+- Deploy Authentik inside the cluster
+- Expose it only through Traefik
+- Protect it with CrowdSec
+
+Identity is now **infrastructure‑critical**.
+
+---
+
+## 4️⃣ Forward Authentication (The Core Mechanism)
+
+Forward authentication works as follows:
 
 1. User requests a service
-2. Reverse proxy pauses the request
-3. Proxy forwards the request to the IdP
-4. IdP authenticates the user (and enforces MFA)
-5. IdP returns identity headers
-6. Proxy allows or denies the request
+2. Traefik pauses the request
+3. Traefik asks Authentik to authenticate the user
+4. Authentik enforces login + MFA
+5. Authentik returns identity headers
+6. Traefik allows or denies the request
 
 The protected service:
-- Never handles authentication
-- Never stores credentials
+- Never sees credentials
+- Never handles sessions
 - Never decides access
 
 This dramatically reduces attack surface.
 
 ---
 
-## 5️⃣ Where CrowdSec Fits in Phase 4
+## 5️⃣ Authentik Concepts You Must Understand
 
-CrowdSec does **not disappear** in a Zero Trust model.
+Authentik always combines **three objects**:
 
-Its role becomes more precise.
+### Application
+Represents *what* is being protected.
 
-### CrowdSec acts as:
+### Provider
+Defines *how* authentication occurs  
+(for Traefik, this is a **Forward Auth Provider**).
 
-- A **pre-identity filter**
-- A **hostile traffic suppressor**
-- A **protective layer in front of identity**
+### Policy
+Defines *who* is allowed (groups, MFA, conditions).
 
-The combined flow looks like this:
+If one is missing, access must fail.
+
+---
+
+## 6️⃣ Designing Identity Groups (Before Config)
+
+Before touching Traefik or Authentik config, define intent.
+
+Recommended baseline groups:
+- `admins`
+- `users`
+- `read-only`
+- `infrastructure`
+
+Policies reference **groups**, not individuals.
+
+This keeps access manageable over time.
+
+---
+
+## 7️⃣ Practical Integration: Authentik + Traefik
+
+Now we connect theory to execution.
+
+### 7.1 Create a Forward Auth Provider (Authentik)
+
+In Authentik Admin UI:
+
+- Create **Proxy Provider**
+- Type: **Forward Auth (single application)**
+- External host: `https://service.example.com`
+
+This defines *how* Traefik will authenticate users.
+
+---
+
+### 7.2 Create the Application (Authentik)
+
+- Name: `Protected Service`
+- Provider: select the provider created above
+
+This binds identity logic to a real service.
+
+---
+
+### 7.3 Attach Access Policies
+
+Example policy:
+- User must belong to `admins`
+- MFA required
+
+Attach policies to:
+- The Application or
+- The Provider
+
+No policy = no access.
+
+---
+
+## 8️⃣ Traefik Configuration (Minimal, Intentional)
+
+### ForwardAuth Middleware
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: authentik-forward-auth
+  namespace: traefik
+spec:
+  forwardAuth:
+    address: https://auth.example.com/outpost.goauthentik.io/auth/traefik
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-authentik-username
+      - X-authentik-groups
+      - X-authentik-email
+```
+
+Traefik does not authenticate.
+It enforces Authentik’s decision.
+
+---
+
+### Protecting a Service
+
+```yaml
+middlewares:
+  - name: authentik-forward-auth
+    namespace: traefik
+```
+
+Once applied:
+- Unauthenticated users are redirected
+- Unauthorized users are denied
+- LAN and WAN behave identically
+
+---
+
+## 9️⃣ CrowdSec + Identity (How They Complement)
+
+CrowdSec operates **before** identity.
 
 ```
-Hostile IP
- → CrowdSec blocks early (Phase 3)
- → Identity never sees the request
+Malicious IP
+ → CrowdSec blocks at edge
+ → Authentik never sees traffic
 
 Legitimate user
- → Identity authenticates
- → Access evaluated
- → Service reached
+ → Authentik authenticates
+ → Traefik enforces
 ```
 
-This prevents:
-- Credential stuffing
-- MFA fatigue attacks
-- Identity brute-force attempts
+This protects:
+- Login pages
+- MFA endpoints
+- Identity infrastructure itself
 
-> **CrowdSec protects identity. Identity protects services.**
-
----
-
-## 6️⃣ Designing Human-Centric Access Policies
-
-Zero Trust policies are written in **human terms**, not network terms.
-
-Examples:
-- “Admins can access admin dashboards”
-- “Only I can access infrastructure tools”
-- “Read-only users can view metrics”
-- “No service is public by default”
-
-We no longer ask:
-> “Where is this user coming from?”
-
-We ask:
-> “Who is this user, and what are they allowed to do?”
+CrowdSec and identity **layer**, not replace each other.
 
 ---
 
-## 7️⃣ MFA — Mandatory, but Intentional
+## 🔟 Validation — Declaring Phase 4 Complete
 
-Multi-Factor Authentication is required, but not everywhere blindly.
+Phase 4 is complete when **all** are true:
 
-Apply MFA to:
-- Identity login itself
-- Administrative access
-- Sensitive services
+- Services redirect to Authentik
+- No service is accessible unauthenticated
+- LAN access behaves like WAN
+- MFA is enforced for sensitive access
+- CrowdSec blocks abusive IPs upstream
+- Identity audit logs show access events
 
-Do **not** apply MFA to:
-- Machine-to-machine traffic
-- Internal service calls
-- Automated processes
-
-The goal is:
-> **Strong security without operational exhaustion**.
+If even one service bypasses identity, Phase 4 is **not done**.
 
 ---
 
-## 8️⃣ Validation — How to Know Phase 4 Is Working
+## 🧭 Phase 4 Completion Checklist
 
-Phase 4 is successful when:
+- [ ] Authentik deployed securely
+- [ ] MFA enabled for admins
+- [ ] Identity groups defined
+- [ ] Forward auth provider created
+- [ ] Traefik middleware applied
+- [ ] All services protected
+- [ ] LAN trust fully removed
+- [ ] CrowdSec protecting identity endpoints
 
-- Accessing any service redirects to identity login
-- Unauthenticated requests are denied
-- Authenticated users see only allowed services
-- LAN and WAN access behave identically
-- CrowdSec blocks hostile IPs before identity
-- Identity logs show clear audit trails
-
-If being “on the LAN” still grants access — Phase 4 is incomplete.
-
----
-
-## 🧭 Phase 4 Output
-
-After completing Phase 4, you now have:
-
-- Identity as the security boundary
-- Zero Trust access for services
-- MFA-backed authentication
-- Reduced blast radius for breaches
-- A system designed for modern threat models
-
-This is where security stops being about infrastructure and starts being about **people and intent**.
-
----
-
-**Security Level Achieved:** ⭐⭐⭐⭐⭐⭐⭐⭐☆☆ (8 / 10)
+Only when all boxes are checked is Phase 4 complete.
 
 ---
 
@@ -304,14 +347,18 @@ This is where security stops being about infrastructure and starts being about *
 
 Phase 5 moves Zero Trust **inside the cluster**:
 - Workload identity
-- Secret zeroization
-- Kubernetes-native trust boundaries
+- Secrets without plaintext
+- Admission‑time policy enforcement
 
-But Phase 4 is the turning point.
-
-> *“Internal” no longer means “trusted”.*
+Phase 4 protects **humans**.  
+Phase 5 protects **software**.
 
 ---
-⬅️ Previous: [Phase 3 - Active Defense & Enforcement](Phase 3 - Active Defense & Enforcement.md)  
-➡️ Next: [Baseline Hardening](02-baseline-hardening.md)
+
+> *Zero Trust is not about distrust.*  
+> *It is about being precise about trust.*
+
 ---
+
+⬅️ Previous: [Phase 2 - Perimeter Awareness](Phase-2---Perimeter-Awareness.md)  
+➡️ Next: [Phase 4 - Identity & Zero Trust](Phase 4 - Identity & Zero Trust.md)

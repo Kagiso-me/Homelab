@@ -266,6 +266,6 @@ After Phase 2 you have:
 **Security Level Achieved:** ⭐⭐⭐⭐⭐☆☆☆☆☆ (5/10) 
 
 ---
-⬅️ Previous: [Phase 1 - Baseline Hardening](Phase 1 - Baseline Hardening.md)  
-➡️ Next: [Phase 3 - Active Defense & Enforcement](Phase 3 - Active Defense & Enforcement.md)
+⬅️ Previous: [Phase 1 - Baseline Hardening](Phase-1---Baseline-Hardening.md)  
+➡️ Next: [Phase 3 - Active Defense & Enforcement](Phase-3---Active-Defense-&-Enforcement.md)
 ---
