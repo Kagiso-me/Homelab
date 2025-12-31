@@ -174,7 +174,7 @@ sudo systemctl reload crowdsec
 
 ### 3.3 Verify CrowdSec Status
 ```bash
-sudo cscli status
+sudo systemctl status crowdsec
 ```
 Confirm:
 - CrowdSec is running
