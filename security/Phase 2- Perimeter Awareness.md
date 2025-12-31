@@ -94,13 +94,33 @@ All firewall logs must be forwarded via syslog.
 ### 2.1 Enable Syslog on MikroTik
 
 ```mikrotik
-/system logging action
-add name=remote target=remote remote=<SECURITY_NODE_IP> remote-port=514
+/system logging action add \
+  name=sentinel \
+  target=remote \
+  remote=<SECURITY_NODE_IP> \
+  remote-port=514 \
+  syslog-facility=local7 \
+  syslog-severity=auto
 ```
+Force syslog to leave via LAN (recommended on RouterOS):
 
 ```mikrotik
-/system logging
-add topics=firewall action=remote
+/system logging action set sentinel src-address=<MIKROTIK_LAN_IP>
+```
+
+Bind firewall logs to this action:
+```mikrotik
+/system logging add topics=firewall action=sentinel
+```
+
+Verify:
+```mikrotik
+/system logging print
+```
+
+Expected:
+```mikrotik
+firewall  sentinel
 ```
 ### 2.2 Verify Log Reception (Security Node)
 On the security node:
@@ -129,10 +149,23 @@ sudo apt install -y crowdsec
 
 ### 3.2 Install Required Collections
 ```bash
-sudo cscli collections install crowdsecurity/syslog
+sudo cscli collections install crowdsecurity/linux
 sudo cscli collections install crowdsecurity/sshd
-sudo cscli collections install crowdsecurity/firewallservices
 ```
+Firewall / Network Detection (Correct Way)
+Firewall detection is delivered via parsers + scenarios, not a single collection.
+
+```bash
+sudo cscli parsers install crowdsecurity/iptables
+sudo cscli scenarios install crowdsecurity/iptables-scan-multi_ports
+sudo cscli scenarios install crowdsecurity/iptables-scan-syn
+```
+(Optional) Generic Syslog Normalization
+Recommended for non-standard devices like MikroTik:
+```bash
+sudo cscli parsers install crowdsecurity/syslog-logs
+```
+
 Restart CrowdSec:
 ```bash
 sudo systemctl restart crowdsec
