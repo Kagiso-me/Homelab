@@ -1,4 +1,5 @@
-# 🥉 Phase 1 — Baseline Hardening (Security Level: 3/10)
+# 🥉 Phase 1 — Baseline Hardening
+#### Security Level: 3/10
 
 This phase establishes **foundational security controls** for the **most critical node in the environment**: the **edge node**.
 

@@ -1,5 +1,5 @@
 # 🥈 Phase 2 — Perimeter Awareness
-Security Level: 5 / 10
+#### Security Level: 5 / 10
 
 Phase 1 hardened the operating system and reduced the attack surface.
 
