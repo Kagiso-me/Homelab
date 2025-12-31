@@ -194,7 +194,6 @@ You should see:
 - Parsed events
 - Scenario hits
 - Decisions created
-If not — stop and fix parsing.
 
 ---
 
