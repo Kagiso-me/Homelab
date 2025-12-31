@@ -12,8 +12,6 @@ Vault is deployed on **Sentinel**, our hardened security node, to:
 - Centralise logging and protection
 - Reduce blast radius
 
-This guide focuses on installation and security only.
-
 ---
 
 ## 🧠 Why Sentinel (Trade-offs)
