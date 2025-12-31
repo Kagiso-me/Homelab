@@ -170,7 +170,6 @@ This scenario detects:
 Restart CrowdSec:
 ```bash
 sudo systemctl reload crowdsec
-sudo systemctl restart crowdsec
 ```
 
 ### 3.3 Verify CrowdSec Status
