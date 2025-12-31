@@ -152,22 +152,24 @@ sudo apt install -y crowdsec
 sudo cscli collections install crowdsecurity/linux
 sudo cscli collections install crowdsecurity/sshd
 ```
-Firewall / Network Detection (Correct Way)
-Firewall detection is delivered via parsers + scenarios, not a single collection.
+Firewall / Network Detection:
 
 ```bash
-sudo cscli parsers install crowdsecurity/iptables
-sudo cscli scenarios install crowdsecurity/iptables-scan-multi_ports
-sudo cscli scenarios install crowdsecurity/iptables-scan-syn
+sudo cscli parsers install crowdsecurity/iptables-logs
 ```
-(Optional) Generic Syslog Normalization
-Recommended for non-standard devices like MikroTik:
+Network Scan Detection Scenarios
+
 ```bash
-sudo cscli parsers install crowdsecurity/syslog-logs
+sudo cscli scenarios install crowdsecurity/iptables-scan-multi_ports
 ```
+This scenario detects:
+ - Horizontal and vertical port scans
+ - Repeated probing across multiple ports
+ - Reconnaissance activity
 
 Restart CrowdSec:
 ```bash
+sudo systemctl reload crowdsec
 sudo systemctl restart crowdsec
 ```
 
