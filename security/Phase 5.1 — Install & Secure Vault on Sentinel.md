@@ -213,6 +213,11 @@ vault operator unseal
 vault operator unseal
 vault operator unseal
 ```
+Example:
+>vault operator unseal fk290@ito3qgk-aewfiuj8139&oi96d7r3r0kopq
+>vault operator unseal j+cp&ow903+w82ub4 k2rnQMDFWEF65EY?>8\dDE
+>vault operator unseal x+cp614/XjDzfw+qFsujGWE7681ScdDaO1CyfFJ#
+
 
 Verify:
 
