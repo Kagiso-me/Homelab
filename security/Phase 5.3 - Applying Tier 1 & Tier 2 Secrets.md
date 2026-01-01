@@ -1,94 +1,217 @@
-# 🥇 Phase 5.3 — Applying Tier 1 & Tier 2 Secrets  
-**Practical Workload Integration Guide**
+# 🥇 Phase 5.3 — Tiered Secret Consumption (Practical Implementation)
+**From Identity → Authorization → Real Secrets**
+
+This phase builds directly on **Phase 5.2**, where:
+- Kubernetes identities were verified
+- Vault roles and policies were enforced
+- No secrets were yet exposed
+
+Phase 5.3 is where Vault begins delivering **real value**:
+secure, auditable, short‑lived secrets consumed by workloads.
+
+We deliberately split secret usage into **two tiers**, based on risk and operational reality.
 
 ---
 
-## 📖 Purpose
+## 🧠 The Tiered Secret Model (Why This Exists)
 
-This phase applies workload identity to **real applications**.
+Not all secrets are equal.
 
-We intentionally support **two secret models** to balance:
-- Security
-- Compatibility
-- Operational simplicity
+| Tier | Secret Type | Characteristics | Examples |
+|----|----|----|----|
+| **Tier 1** | Static credentials | Low churn, infra-bound | DB passwords |
+| **Tier 2** | Dynamic / high-risk | Rotated, identity-bound | App auth tokens |
+
+This allows:
+- gradual adoption
+- app compatibility
+- reduced blast radius
+- operational sanity
 
 ---
 
-## 🥇 Tier 1 — Dynamic Secrets (Preferred)
+## 🔐 Tier 1 — Static Secrets (PostgreSQL Example)
 
-### When to Use
-- Databases
-- Admin access
-- High-impact credentials
+### What Tier 1 Is (and Is Not)
 
-### How It Works
-- Vault creates credentials on demand
-- TTL enforced
-- Automatic revocation
+Tier 1:
+- replaces Kubernetes Secrets
+- centralizes sensitive config
+- improves auditability
 
-Example:
-```hcl
-path "database/creds/app" {
-  capabilities = ["read"]
-}
+Tier 1 **does not yet**:
+- rotate automatically
+- issue per-pod credentials
+
+This is intentional.
+
+---
+
+## 1️⃣ Enable KV Secrets Engine
+
+On Sentinel:
+
+```bash
+vault secrets enable -path=kv kv-v2
 ```
 
-Workloads request credentials at runtime.
+Verify:
 
----
-
-## 🥈 Tier 2 — Identity-Gated KV Secrets
-
-### When to Use
-- Third-party API keys
-- Legacy apps
-- Secrets that cannot rotate dynamically
-
-### How It Works
-- Secrets stored in Vault KV v2
-- Access controlled by Kubernetes Auth
-- No secrets in Git or YAML
-
-Example:
-```hcl
-path "kv/data/app" {
-  capabilities = ["read"]
-}
+```bash
+vault secrets list
 ```
 
-Still Zero Trust — just pragmatic.
+---
+
+## 2️⃣ Store PostgreSQL Credentials
+
+Example PostgreSQL credentials:
+
+```bash
+vault kv put kv/postgres/app \
+  username="app_user" \
+  password="supersecretpassword"
+```
 
 ---
 
-## 🧠 Choosing the Right Tier
+## 3️⃣ Create a Vault Policy for PostgreSQL Access
 
-| Question | Use Tier |
-|-------|---------|
-Can credentials rotate automatically? | Tier 1 |
-High blast radius if leaked? | Tier 1 |
-Legacy app? | Tier 2 |
-Low-risk API key? | Tier 2 |
+```bash
+vault policy write postgres-read - <<EOF
+path "kv/data/postgres/app" {
+  capabilities = ["read"]
+}
+EOF
+```
 
 ---
 
-## 🧪 Migration Strategy
+## 4️⃣ Bind Policy to a Kubernetes Role
 
-1. Start with one Tier 1 workload
-2. Validate stability
-3. Migrate Tier 2 workloads
-4. Document exceptions
+```bash
+vault write auth/kubernetes/role/postgres-app \
+  bound_service_account_names=postgres-sa \
+  bound_service_account_namespaces=apps \
+  policies=postgres-read \
+  ttl=1h
+```
 
-Never force Vault where it breaks apps.
+---
+
+## 5️⃣ Kubernetes Deployment Example (Tier 1)
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-client
+  namespace: apps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-client
+  template:
+    metadata:
+      labels:
+        app: postgres-client
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "postgres-app"
+        vault.hashicorp.com/agent-inject-secret-db: "kv/data/postgres/app"
+        vault.hashicorp.com/agent-inject-template-db: |
+          {{- with secret "kv/data/postgres/app" -}}
+          export DB_USER="{{ .Data.data.username }}"
+          export DB_PASS="{{ .Data.data.password }}"
+          {{- end }}
+    spec:
+      serviceAccountName: postgres-sa
+      containers:
+      - name: app
+        image: postgres:16
+        command: ["sh", "-c", "sleep 3600"]
+```
+
+---
+
+## 🔐 Tier 2 — Dynamic Secrets (Nextcloud Example)
+
+---
+
+## 6️⃣ Enable Database Secrets Engine
+
+```bash
+vault secrets enable database
+```
+
+---
+
+## 7️⃣ Configure PostgreSQL Connection
+
+```bash
+vault write database/config/postgres \
+  plugin_name=postgresql-database-plugin \
+  allowed_roles="nextcloud" \
+  connection_url="postgresql://{{username}}:{{password}}@postgres.apps.svc.cluster.local:5432/nextcloud?sslmode=disable" \
+  username="vault_admin" \
+  password="vault_admin_password"
+```
+
+---
+
+## 8️⃣ Create Dynamic DB Role
+
+```bash
+vault write database/roles/nextcloud \
+  db_name=postgres \
+  creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; GRANT ALL PRIVILEGES ON DATABASE nextcloud TO \"{{name}}\";" \
+  default_ttl="1h" \
+  max_ttl="24h"
+```
+
+---
+
+## 9️⃣ Nextcloud Policy
+
+```bash
+vault policy write nextcloud-db - <<EOF
+path "database/creds/nextcloud" {
+  capabilities = ["read"]
+}
+EOF
+```
+
+---
+
+## 🔟 Nextcloud Deployment Snippet
+
+```yaml
+metadata:
+  annotations:
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "nextcloud"
+    vault.hashicorp.com/agent-inject-secret-db: "database/creds/nextcloud"
+    vault.hashicorp.com/agent-inject-template-db: |
+      {{- with secret "database/creds/nextcloud" -}}
+      export DB_USER="{{ .Data.username }}"
+      export DB_PASS="{{ .Data.password }}"
+      {{- end }}
+```
+
+---
+
+## 🧾 Audit & Validation
+
+```bash
+sudo tail -f /var/log/vault_audit.log
+```
 
 ---
 
 ## ✅ Phase 5.3 Done When
 
-- At least one Tier 1 app migrated
-- Tier 2 apps gated by identity
-- No secrets in manifests
-- Vault audit logs show access
-
----
-
-> *Zero Trust is not dogma. It is deliberate control.*
+- Tier 1 static secrets work
+- Tier 2 dynamic credentials rotate
+- No Kubernetes Secrets used
+- Vault audit logs populated
