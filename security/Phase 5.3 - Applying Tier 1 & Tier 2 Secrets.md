@@ -1,85 +1,158 @@
-# 🥇 Phase 5.3 — Tiered Secret Consumption (Practical Implementation)
-**From Identity → Authorization → Real Secrets**
-
-This phase builds directly on **Phase 5.2**, where:
-- Kubernetes identities were verified
-- Vault roles and policies were enforced
-- No secrets were yet exposed
-
-Phase 5.3 is where Vault begins delivering **real value**:
-secure, auditable, short‑lived secrets consumed by workloads.
-
-We deliberately split secret usage into **two tiers**, based on risk and operational reality.
+# 🥇 Phase 5.3 — PostgreSQL Bootstrap & Application Secrets 
+**Why we bootstrap. Why Vault comes later. How it all fits together.**
 
 ---
 
-## 🧠 The Tiered Secret Model (Why This Exists)
-
-Not all secrets are equal.
-
-| Tier | Secret Type | Characteristics | Examples |
-|----|----|----|----|
-| **Tier 1** | Static credentials | Low churn, infra-bound | DB passwords |
-| **Tier 2** | Dynamic / high-risk | Rotated, identity-bound | App auth tokens |
-
-This allows:
-- gradual adoption
-- app compatibility
-- reduced blast radius
-- operational sanity
+> This section exists because most Vault guides get this *wrong*.
+>
+> They either:
+> - try to put PostgreSQL passwords into Vault from day one, or
+> - fail to explain *why* certain secrets must never depend on Vault.
+>
+> This guide fixes that.
 
 ---
 
-## 🔐 Tier 1 — Static Secrets (PostgreSQL Example)
+## 🧭 Where Phase 5.3 Fits in the Bigger Picture
 
-### What Tier 1 Is (and Is Not)
+You have already completed:
 
-Tier 1:
-- replaces Kubernetes Secrets
-- centralizes sensitive config
-- improves auditability
+- **Phase 4** — Human identity & Zero Trust (Authentik + Traefik)
+- **Phase 5.1** — Vault installed and secured on Sentinel
+- **Phase 5.2** — Kubernetes ↔ Vault trust established
 
-Tier 1 **does not yet**:
-- rotate automatically
-- issue per-pod credentials
+Phase **5.3** answers one critical question:
 
-This is intentional.
+> **How do we actually use Vault for real applications — without breaking our cluster?**
 
 ---
 
-## 1️⃣ Enable KV Secrets Engine
+## 🧠 The Core Principle (Read This Twice)
 
-On Sentinel:
+> **Infrastructure must be able to start without Vault.  
+> Applications may depend on Vault.**
+
+---
+
+## 🧱 Part 1 — Why PostgreSQL Is Bootstrapped Outside Vault
+
+PostgreSQL is infrastructure, not an application.
+
+It must:
+- start independently
+- survive Vault downtime
+- avoid circular dependencies
+
+Therefore:
+- PostgreSQL **must not** depend on Vault to start
+- PostgreSQL uses a **bootstrap secret outside Vault**
+
+This is correct architecture, not a compromise.
+
+---
+
+## 🔐 Part 2 — PostgreSQL Bootstrap Secret (Tier 0)
+
+### Create the bootstrap secret
+
+```bash
+kubectl create namespace apps
+```
+
+```bash
+kubectl create secret generic postgres-bootstrap \
+  -n apps \
+  --from-literal=admin-password='<STRONG_ADMIN_PASSWORD>' \
+  --from-literal=password='<STRONG_APP_OWNER_PASSWORD>' \
+  --from-literal=replication-password='<STRONG_REPL_PASSWORD>'
+```
+
+This secret is:
+- used only at database initialization
+- never read by applications
+- not managed by Vault
+
+---
+
+## 🔒 Locking It Down with RBAC
+
+Only PostgreSQL may read this secret.
+
+```bash
+kubectl create serviceaccount postgresql -n apps
+```
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: postgres-bootstrap-reader
+  namespace: apps
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["postgres-bootstrap"]
+  verbs: ["get"]
+```
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgres-bootstrap-binding
+  namespace: apps
+subjects:
+- kind: ServiceAccount
+  name: postgresql
+roleRef:
+  kind: Role
+  name: postgres-bootstrap-reader
+  apiGroup: rbac.authorization.k8s.io
+```
+
+---
+
+## 🔐 Part 3 — Why Applications Never Use PostgreSQL Secrets
+
+Application pods:
+- restart frequently
+- scale dynamically
+- are untrusted by default
+
+Sharing PostgreSQL credentials would:
+- increase blast radius
+- prevent rotation
+- remove auditability
+
+Vault exists to solve *this* problem.
+
+---
+
+## 🔑 Part 4 — Application Secrets via Vault (Nextcloud)
+
+### Enable KV engine
 
 ```bash
 vault secrets enable -path=kv kv-v2
 ```
 
-Verify:
+---
+
+### Store app credentials
 
 ```bash
-vault secrets list
+vault kv put kv/nextcloud/db \
+  username="nextcloud_app" \
+  password="strong-app-password"
 ```
 
 ---
 
-## 2️⃣ Store PostgreSQL Credentials
-
-Example PostgreSQL credentials:
+### Create Vault policy
 
 ```bash
-vault kv put kv/postgres/app \
-  username="app_user" \
-  password="supersecretpassword"
-```
-
----
-
-## 3️⃣ Create a Vault Policy for PostgreSQL Access
-
-```bash
-vault policy write postgres-read - <<EOF
-path "kv/data/postgres/app" {
+vault policy write nextcloud-db - <<EOF
+path "kv/data/nextcloud/db" {
   capabilities = ["read"]
 }
 EOF
@@ -87,131 +160,39 @@ EOF
 
 ---
 
-## 4️⃣ Bind Policy to a Kubernetes Role
+### Bind policy to Kubernetes identity
 
 ```bash
-vault write auth/kubernetes/role/postgres-app \
-  bound_service_account_names=postgres-sa \
+vault write auth/kubernetes/role/nextcloud \
+  bound_service_account_names=nextcloud \
   bound_service_account_namespaces=apps \
-  policies=postgres-read \
+  policies=nextcloud-db \
   ttl=1h
 ```
 
 ---
 
-## 5️⃣ Kubernetes Deployment Example (Tier 1)
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres-client
-  namespace: apps
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres-client
-  template:
-    metadata:
-      labels:
-        app: postgres-client
-      annotations:
-        vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: "postgres-app"
-        vault.hashicorp.com/agent-inject-secret-db: "kv/data/postgres/app"
-        vault.hashicorp.com/agent-inject-template-db: |
-          {{- with secret "kv/data/postgres/app" -}}
-          export DB_USER="{{ .Data.data.username }}"
-          export DB_PASS="{{ .Data.data.password }}"
-          {{- end }}
-    spec:
-      serviceAccountName: postgres-sa
-      containers:
-      - name: app
-        image: postgres:16
-        command: ["sh", "-c", "sleep 3600"]
-```
-
----
-
-## 🔐 Tier 2 — Dynamic Secrets (Nextcloud Example)
-
----
-
-## 6️⃣ Enable Database Secrets Engine
-
-```bash
-vault secrets enable database
-```
-
----
-
-## 7️⃣ Configure PostgreSQL Connection
-
-```bash
-vault write database/config/postgres \
-  plugin_name=postgresql-database-plugin \
-  allowed_roles="nextcloud" \
-  connection_url="postgresql://{{username}}:{{password}}@postgres.apps.svc.cluster.local:5432/nextcloud?sslmode=disable" \
-  username="vault_admin" \
-  password="vault_admin_password"
-```
-
----
-
-## 8️⃣ Create Dynamic DB Role
-
-```bash
-vault write database/roles/nextcloud \
-  db_name=postgres \
-  creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; GRANT ALL PRIVILEGES ON DATABASE nextcloud TO \"{{name}}\";" \
-  default_ttl="1h" \
-  max_ttl="24h"
-```
-
----
-
-## 9️⃣ Nextcloud Policy
-
-```bash
-vault policy write nextcloud-db - <<EOF
-path "database/creds/nextcloud" {
-  capabilities = ["read"]
-}
-EOF
-```
-
----
-
-## 🔟 Nextcloud Deployment Snippet
+### Inject secrets into Nextcloud
 
 ```yaml
 metadata:
   annotations:
     vault.hashicorp.com/agent-inject: "true"
     vault.hashicorp.com/role: "nextcloud"
-    vault.hashicorp.com/agent-inject-secret-db: "database/creds/nextcloud"
+    vault.hashicorp.com/agent-inject-secret-db: "kv/data/nextcloud/db"
     vault.hashicorp.com/agent-inject-template-db: |
-      {{- with secret "database/creds/nextcloud" -}}
-      export DB_USER="{{ .Data.username }}"
-      export DB_PASS="{{ .Data.password }}"
+      {{- with secret "kv/data/nextcloud/db" -}}
+      export DB_USER="{{ .Data.data.username }}"
+      export DB_PASS="{{ .Data.data.password }}"
       {{- end }}
 ```
 
 ---
 
-## 🧾 Audit & Validation
+## ✅ Phase 5.3 Complete When
 
-```bash
-sudo tail -f /var/log/vault_audit.log
-```
-
----
-
-## ✅ Phase 5.3 Done When
-
-- Tier 1 static secrets work
-- Tier 2 dynamic credentials rotate
-- No Kubernetes Secrets used
-- Vault audit logs populated
+- PostgreSQL boots without Vault
+- Bootstrap secret is RBAC-restricted
+- Apps never read PostgreSQL secrets
+- Vault injects app secrets correctly
+- Access is logged and auditable
