@@ -1,237 +1,136 @@
-# 🥇 Phase 5.2 — Vault ↔ Kubernetes Authentication  
-**Practical Implementation Guide**
+# Phase 5.2 — Vault ↔ Kubernetes Authentication
+
+## Purpose
+
+This phase defines **how External Secrets Operator authenticates to Vault**.
+
+This is the **only authentication path** between Kubernetes and Vault in this platform.
+
+Applications never authenticate to Vault.
+Vault Agent Injector is not used.
 
 ---
 
-## 📖 Purpose
-
-This phase enables **workload authentication**.
-
-Vault learns to trust Kubernetes identities using:
-- ServiceAccounts
-- Kubernetes Auth Method
-- Explicit role bindings
-
-This phase is common to **both Tier 1 and Tier 2**.
-
----
-
-## 🧠 Identity Flow
+## Trust Model Overview
 
 ```
-Pod → ServiceAccount → Vault Auth → Vault Role → Token
+Kubernetes API Server
+        ↓
+ServiceAccount (ESO)
+        ↓
+Vault Kubernetes Auth Method
+        ↓
+Vault Role
+        ↓
+Vault Policy
+        ↓
+Read access to secrets
 ```
+
+Vault treats Kubernetes as an **identity provider**.
 
 ---
 
-## 1️⃣ Enable Kubernetes Auth
+## Step 1 — ServiceAccount for ESO
+
+ESO authenticates to Vault using a dedicated ServiceAccount.
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+```
+
+This ServiceAccount represents ESO’s identity.
+
+---
+
+## Step 2 — Enable Kubernetes Auth in Vault
+
+Enable the auth method (once):
 
 ```bash
 vault auth enable kubernetes
 ```
 
----
-
-## 2️⃣ Allow Vault to Validate Pods
+Configure Vault to trust the Kubernetes API:
 
 ```bash
-kubectl create serviceaccount vault-auth -n kube-system
+vault write auth/kubernetes/config \
+  kubernetes_host="https://$KUBERNETES_SERVICE_HOST:443" \
+  kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+  token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token
 ```
 
-Bind RBAC:
-
-```yaml
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: vault-auth-delegator
-roleRef:
-  kind: ClusterRole
-  name: system:auth-delegator
-  apiGroup: rbac.authorization.k8s.io
-subjects:
-- kind: ServiceAccount
-  name: vault-auth
-  namespace: kube-system
-```
+Vault can now validate Kubernetes-issued identities.
 
 ---
 
-## 3️⃣ Configure Vault Trust
+## Step 3 — Define Vault Policies
 
-```bash
-vault write auth/kubernetes/config   kubernetes_host=https://<API_SERVER>   token_reviewer_jwt=@jwt.txt   kubernetes_ca_cert=@ca.crt
-```
+Policies define **what** ESO can read.
 
-Vault now trusts Kubernetes identities.
+Example (read-only access to app secrets):
 
----
-
-## 4️⃣ Define Roles & Policies
-
-Roles bind:
-- ServiceAccount
-- Namespace
-- Policy
-- TTL
-
-This identity layer underpins **all secret access**.
-
-
-## 4.1 Create a Minimal Vault Policy (Proof Only)
-
-This policy grants **no secret access**.  
-It exists purely to validate authentication and authorization flow.
-
-```bash
-vault policy write k8s-auth-test - <<EOF
-path "auth/token/lookup-self" {
+```hcl
+path "kv/data/apps/*" {
   capabilities = ["read"]
 }
-EOF
 ```
-This allows a workload to inspect its own token metadata and nothing else.
 
-## 4.2 Create a Test Kubernetes Identity
-
-We now create a deliberately unprivileged Kubernetes identity to test authorization.
+Apply the policy:
 
 ```bash
-kubectl create namespace vault-test
-kubectl create serviceaccount vault-test-sa -n vault-test
+vault policy write apps-read kv-apps-read.hcl
 ```
-
-This identity represents:
-- a single workload
-- in a single namespace
-- with no implicit privileges
 
 ---
 
-## 4.3 Bind Identity to Policy with a Vault Role
+## Step 4 — Create Vault Role
 
-This step enforces **who may authenticate** and **what they receive**.
+Bind the Kubernetes ServiceAccount to the policy:
 
 ```bash
-vault write auth/kubernetes/role/vault-test \
-  bound_service_account_names=vault-test-sa \
-  bound_service_account_namespaces=vault-test \
-  policies=k8s-auth-test \
-  ttl=15m
-```
-
-This role enforces:
-
-- Authentication is limited to `vault-test-sa`
-- Only in the `vault-test` namespace
-- Tokens are short-lived (15 minutes)
-- No other workloads are trusted
-
-This is **deny-by-default** authorization.
-
----
-
-## 4.4 Validate Authentication from a Pod
-
-We now prove that:
-- Kubernetes identity works
-- Vault authorization works
-- Tokens are issued correctly
-- No secrets are exposed
-
-### Launch a test pod
-
-```bash
-kubectl run vault-auth-test \
-  -n vault-test \
-  --rm -it \
-  --image=alpine \
-  --serviceaccount=vault-test-sa \
-  -- sh
-```
-
-Inside the pod:
-
-```sh
-apk add --no-cache curl jq
-```
-
-Authenticate to Vault:
-
-```sh
-export VAULT_ADDR=https://sentinel.local.kagiso.me:8200
-export VAULT_ROLE=vault-test
-
-JWT=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-
-curl -s --request POST \
-  --data "{\"role\":\"$VAULT_ROLE\",\"jwt\":\"$JWT\"}" \
-  $VAULT_ADDR/v1/auth/kubernetes/login | jq
-```
-
-### Expected outcome
-
-- A Vault token is returned
-- The token has:
-  - policy `k8s-auth-test`
-  - a short TTL
-- No secrets are accessible
-
-Exit the pod:
-
-```sh
-exit
+vault write auth/kubernetes/role/external-secrets \
+  bound_service_account_names=external-secrets \
+  bound_service_account_namespaces=external-secrets \
+  policies=apps-read \
+  ttl=1h
 ```
 
 ---
 
-## 4.5 Observe Audit Logs
+## Step 5 — ClusterSecretStore (ESO → Vault)
 
-On the Sentinel node:
-
-```bash
-sudo tail -n 10 /var/log/vault_audit.log
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: vault-backend
+spec:
+  provider:
+    vault:
+      server: http://vault.vault.svc:8200
+      path: kv
+      version: v2
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: external-secrets
+          serviceAccountRef:
+            name: external-secrets
+            namespace: external-secrets
 ```
 
-You should see:
-- Kubernetes authentication events
-- Role evaluation
-- Token issuance
-
-This confirms:
-- identity enforcement
-- authorization decisions
-- observability
-
 ---
 
-## ✅ Phase 5.2 Completion Criteria
+## Phase Outcome
 
-Phase 5.2 is complete when:
+At the end of Phase 5.2:
 
-- Vault validates Kubernetes ServiceAccount identities
-- Vault roles bind identities to policies
-- Policies enforce explicit permissions
-- Tokens are short-lived and scoped
-- Audit logs show authentication activity
-- **No secrets are consumed yet**
-
-At this point:
-
-> **Workload identity is real, enforced, and observable.**
-
----
-
-## 🧭 Transition to Phase 5.3
-
-With identity and authorization validated, the environment is now safe to introduce secrets.
-
-Phase 5.3 focuses on:
-- Tier 1 static secrets
-- Tier 2 dynamic credentials
-- Data-layer least privilege
-
-This staged approach ensures:
-- minimal blast radius
-- clean audit trails
-- predictable behavior
+- Vault trusts Kubernetes identities
+- ESO can authenticate successfully
+- ClusterSecretStore is functional
+- No applications consume secrets yet
