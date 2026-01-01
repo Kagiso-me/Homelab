@@ -62,10 +62,6 @@ subjects:
 ```bash
 vault write auth/kubernetes/config   kubernetes_host=https://<API_SERVER>   token_reviewer_jwt=@jwt.txt   kubernetes_ca_cert=@ca.crt
 ```
->kubectl config view --raw --minify | grep server:
-
->kubectl create token vault-auth -n kube-system > jwt.txt
-
 
 Vault now trusts Kubernetes identities.
 
