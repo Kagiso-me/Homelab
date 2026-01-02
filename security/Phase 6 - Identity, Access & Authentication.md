@@ -94,114 +94,6 @@ Core components:
 
 ---
 
-## Secrets Strategy (Important)
-
-We **do not hardcode secrets**.
-
-All secrets live in Vault:
-```
-kv/apps/authentik
-```
-
-Example secrets:
-- AUTHENTIK_SECRET_KEY
-- POSTGRES_PASSWORD
-- REDIS_PASSWORD
-- AUTHENTIK_BOOTSTRAP_PASSWORD
-
-ESO syncs these into Kubernetes Secrets.
-
-This keeps Phase 6 consistent with Phase 5.
-
----
-
-## Step-by-Step: Installing Authentik
-
-### 1. Prepare Vault Secrets
-
-On the Vault host:
-
-```
-vault kv put kv/apps/authentik \
-  secret_key=<random-64-char-string> \
-  postgres_password=<strong-password> \
-  redis_password=<strong-password> \
-  bootstrap_password=<initial-admin-password>
-```
-
----
-
-### 2. Create ExternalSecret
-
-This exposes Vault secrets to Kubernetes:
-
-```
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: authentik-secrets
-  namespace: authentik
-spec:
-  secretStoreRef:
-    name: vault-backend
-    kind: ClusterSecretStore
-  target:
-    name: authentik-secrets
-  data:
-    - secretKey: AUTHENTIK_SECRET_KEY
-      remoteRef:
-        key: kv/apps/authentik
-        property: secret_key
-
-    - secretKey: AUTHENTIK_BOOTSTRAP_PASSWORD
-      remoteRef:
-        key: kv/apps/authentik
-        property: bootstrap_password
-```
-
----
-
-### 3. Install Authentik via Helm
-
-Add repo:
-
-```
-helm repo add authentik https://charts.goauthentik.io
-helm repo update
-```
-
-Install:
-
-```
-helm install authentik authentik/authentik \
-  -n authentik --create-namespace \
-  -f values.yaml
-```
-
-Key values to set:
-- Use existing secret (`authentik-secrets`)
-- Disable embedded secrets
-- Configure external DB if needed
-
----
-
-## Ingress & TLS Integration (Traefik)
-
-Authentik is exposed via Traefik:
-
-```
-https://auth.kagiso.me
-```
-
-Key points:
-- cert-manager handles certificates
-- Traefik terminates TLS
-- Authentik must be reachable by Traefik
-
-This is a **normal ingress**, nothing special yet.
-
----
-
 ## How Apps Integrate (Two Models)
 
 This is the most important part.
@@ -334,11 +226,10 @@ This phase should **help you**, not fight you.
 ## What Comes Next
 
 After Phase 6:
-- Phase 8 — Backup, Recovery & Integrity
+- Phase 7 — Backup, Recovery & Integrity
 - Auxiliary — OpenCanary
 - Optional future hardening (Suricata, etc.)
 
-Phase 7 (runtime enforcement) remains intentionally scrapped.
 
 ---
 
