@@ -201,28 +201,6 @@ Phase 6 is considered complete when:
 
 ---
 
-## Common Mistakes to Avoid
-
-- Protecting all apps immediately
-- Enabling MFA too early
-- Hardcoding secrets
-- Mixing enforcement into this phase
-
----
-
-## Final Notes
-
-Phase 6 is about **control and clarity**, not maximal lockdown.
-
-If it ever feels heavy:
-- Pause
-- Reduce scope
-- Make it optional again
-
-This phase should **help you**, not fight you.
-
----
-
 ## What Comes Next
 
 After Phase 6:
@@ -232,5 +210,3 @@ After Phase 6:
 
 
 ---
-
-End of Phase 6 Guide
