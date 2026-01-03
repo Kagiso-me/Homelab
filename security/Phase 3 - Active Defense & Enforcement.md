@@ -1,57 +1,52 @@
 # 🥇 Phase 3 — Active Defense & Enforcement
-#### **Security Level:** 7 / 10
 
-✅ **Phase 1** ⇒ Hardened the host.
-✅ **Phase 2** ⇒ Gave us visibility.
+#### **Security Level:** 8 / 10
 
-**Phase 3 is where the environment starts fighting back.**
-
-This phase introduces automated enforcement — turning detected malicious behavior into **real, measurable consequences**.
+> **Detection is passive. Enforcement changes outcomes.**
+> Phase 3 turns CrowdSec decisions into **real, automated blocks** at **multiple layers**.
 
 ---
 
-## 🧠 Context: Where We Are Now
+## 🧠 Context
 
 By the end of Phase 2:
 
-- The edge router logs meaningful events
-- Logs are centralized on the security node (Sentinel)
-- CrowdSec observes behavior patterns
-- Local brute-force attempts are detected
+* Logs are centralized on the security node (**Sentinel**)
+* CrowdSec analyzes router, system, and ingress logs
+* Malicious behavior is detected reliably
 
-Detection alone is not enough.
-
-> **Detection without enforcement is still reactive.**
-
-Phase 3 closes that gap.
+Phase 3 introduces **enforcement** — automatic, observable, and reversible.
 
 ---
 
 ## 🎯 Phase Goal
 
-Transform passive detection into **active defense**.
+Transform detection into **active defense**.
 
 By the end of this phase:
 
-- Malicious IPs are automatically blocked
-- Blocking happens as close to the edge as possible
-- Enforcement is consistent and reversible
-- No human intervention is required
-- False positives are controlled and observable
+* Malicious IPs are automatically blocked
+* Blocking happens at the **earliest effective layer**
+* Enforcement is consistent across the stack
+* Actions are reversible and auditable
+* No manual intervention is required
 
 ---
 
 ## 🔐 Scope
 
-**Applies to**
-- Sentinel (security node)
-- MikroTik edge router
-- Internet-facing services
+**In scope**
+
+* Sentinel (CrowdSec decision engine)
+* MikroTik edge router
+* Traefik ingress controller
+* Internet-facing services
 
 **Out of scope**
-- Kubernetes policy
-- Application-layer auth
-- Zero Trust identity (future phase)
+
+* Kubernetes NetworkPolicy
+* Application-level authentication
+* Zero Trust identity (Phase 4)
 
 ---
 
@@ -59,37 +54,48 @@ By the end of this phase:
 
 > **Block early. Block upstream. Block surgically.**
 
-We do not:
-- Geo-block blindly
-- Permanently ban without review
-- Push enforcement deep into workloads
+We do **not**:
 
-We do:
-- Enforce at the edge
-- Let behavior decide
-- Keep all actions observable and reversible
+* Geo-block blindly
+* Permanently ban without review
+* Push enforcement deep into workloads
+
+We **do**:
+
+* Enforce as close to the edge as possible
+* Use behavior-based decisions
+* Maintain observability and reversibility
 
 ---
 
-## 🗺️ Enforcement Flow
+## 🗺️ Enforcement Flow (Updated)
 
-Internet → MikroTik (Router)→ Sentinel (CrowdSec) → Decision → Bouncer → Edge Block
+```
+Internet
+  ↓
+MikroTik Router (L3/L4 enforcement)
+  ↓
+Traefik Ingress (L7 / HTTP enforcement)
+  ↓
+Services
+```
 
-Detection is centralized.  
-Enforcement is upstream.
+* **Sentinel (CrowdSec)** is the single decision engine
+* **Bouncers** enforce decisions at different layers
 
 ---
 
 ## 1️⃣ CrowdSec Enforcement Model
 
-CrowdSec does not block traffic itself.
+CrowdSec does **not** block traffic itself.
 
 It produces **decisions**:
-- IP
-- Reason
-- Duration
 
-Decisions are consumed by **bouncers**.
+* IP
+* Scenario
+* Duration
+
+Decisions are enforced by **bouncers**.
 
 ---
 
@@ -97,25 +103,31 @@ Decisions are consumed by **bouncers**.
 
 Given this environment:
 
-- MikroTik is the choke point
-- Sentinel is the decision engine
+* MikroTik is the **network choke point**
+* Traefik is the **application choke point**
+* Sentinel is the **authority**
 
-**Correct enforcement point:** MikroTik
+We therefore enforce at **two layers**:
 
-One block protects everything.
+| Layer | Enforcement      | Purpose                   |
+| ----- | ---------------- | ------------------------- |
+| L3/L4 | MikroTik bouncer | Global network protection |
+| L7    | Traefik bouncer  | HTTP-aware protection     |
 
 ---
 
-## 3️⃣ Prepare MikroTik for Automated Blocking
+# 🔒 PART A — MikroTik Enforcement (Edge)
 
-### 3.1 Create Dedicated Address List
+## 3️⃣ Prepare MikroTik
+
+### 3.1 Create Address List
 
 ```mikrotik
 /ip firewall address-list
 add list=crowdsec_blacklist address=0.0.0.0 disabled=yes comment="placeholder"
 ```
 
-### 3.2 Enforce the Blocklist
+### 3.2 Enforce Blocklist
 
 ```mikrotik
 /ip firewall filter
@@ -124,14 +136,15 @@ add chain=input src-address-list=crowdsec_blacklist action=drop \
 ```
 
 Rule placement:
-- Below established/related
-- Above allow rules
+
+* Below established/related
+* Above allow rules
 
 ---
 
-## 4️⃣ CrowdSec Bouncer Setup
+## 4️⃣ MikroTik Bouncer Setup (Sentinel)
 
-### 4.1 Install Bouncer Package
+### 4.1 Install Bouncer
 
 ```bash
 sudo apt install -y crowdsec-firewall-bouncer-iptables
@@ -143,7 +156,7 @@ sudo apt install -y crowdsec-firewall-bouncer-iptables
 sudo cscli bouncers add mikrotik-bouncer
 ```
 
-Save the generated key.
+Save the API key.
 
 ---
 
@@ -175,56 +188,175 @@ mikrotik:
 
 ---
 
-## 6️⃣ Validation
+## 6️⃣ Validate MikroTik Enforcement
 
-### 6.1 Trigger Test Attack
-
-From an external IP:
+### Trigger Test Attack
 
 ```bash
 for i in {1..10}; do ssh invalid@<PUBLIC_IP>; done
 ```
 
-### 6.2 Check CrowdSec
+### Verify CrowdSec
 
 ```bash
 sudo cscli decisions list
 ```
 
-### 6.3 Check MikroTik
+### Verify MikroTik
 
 ```mikrotik
 /ip firewall address-list print where list=crowdsec_blacklist
 ```
 
-Traffic should now be blocked upstream.
+---
+
+# 🚦 PART B — Traefik Enforcement (Ingress)
+
+## 7️⃣ Why Traefik Enforcement Is Needed
+
+MikroTik blocks **network abuse**, but cannot see:
+
+* HTTP probing (404 scans)
+* CMS / API enumeration
+* Auth endpoint abuse
+* Large-upload DoS attempts
+
+These appear **only** in Traefik access logs.
 
 ---
 
-## 7️⃣ Safety & Rollback
+## 8️⃣ Traefik Bouncer Overview
 
-### Manual Unban
+The Traefik bouncer:
+
+* Runs inside Traefik as a plugin
+* Queries CrowdSec LAPI per request
+* Blocks malicious IPs before routing
+
+It **enforces**, it does not detect.
+
+---
+
+## 9️⃣ Create Traefik API Key (Sentinel)
 
 ```bash
-sudo cscli decisions delete --ip <IP>
+sudo cscli bouncers add traefik-bouncer
 ```
 
-### Emergency Disable
+Save the API key.
+
+---
+
+## 🔟 Enable Traefik CrowdSec Plugin
+
+In Traefik Helm values:
+
+```yaml
+experimental:
+  plugins:
+    crowdsec:
+      moduleName: github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin
+      version: v1.3.0
+```
+
+Upgrade Traefik:
+
+```bash
+helm upgrade traefik traefik/traefik -n traefik -f values.yaml
+```
+
+---
+
+## 1️⃣1️⃣ Create Traefik CrowdSec Middleware
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: crowdsec-bouncer
+  namespace: traefik
+spec:
+  plugin:
+    crowdsec:
+      enabled: true
+      crowdsecLapiHost: http://crowdsec.sentinel.svc.cluster.local:8080
+      crowdsecLapiKey: <API_KEY>
+      crowdsecMode: live
+```
+
+---
+
+## 1️⃣2️⃣ Attach Middleware to IngressRoutes
+
+Example:
+
+```yaml
+middlewares:
+  - name: crowdsec-bouncer
+    namespace: traefik
+```
+
+Apply to all internet-facing services.
+
+---
+
+## 1️⃣3️⃣ Enable Traefik Log Collection
+
+Ensure Traefik access logs are enabled:
+
+```yaml
+accessLog:
+  enabled: true
+  format: json
+```
+
+Install Traefik collection on Sentinel:
+
+```bash
+sudo cscli collections install crowdsecurity/traefik
+sudo systemctl restart crowdsec
+```
+
+---
+
+## 1️⃣4️⃣ Validate Traefik Enforcement
+
+### Trigger HTTP Probing
+
+```bash
+curl https://cloud.example.com/wp-login.php
+curl https://cloud.example.com/admin
+```
+
+### Verify CrowdSec Decision
+
+```bash
+sudo cscli decisions list
+```
+
+### Verify Traefik Blocking
+
+```bash
+kubectl logs -n traefik deploy/traefik | grep crowdsec
+```
+
+---
+
+## 1️⃣5️⃣ Safety & Rollback
+
+### Remove Traefik Enforcement
+
+```bash
+kubectl delete middleware crowdsec-bouncer -n traefik
+```
+
+### Remove MikroTik Enforcement
 
 ```mikrotik
 /ip firewall filter disable [find comment~"CrowdSec"]
 ```
 
----
-
-## 8️⃣ Phase 3 Validation Checklist
-
-- Decisions created only after malicious behavior
-- IPs added automatically to MikroTik
-- Bans expire correctly
-- No LAN IPs blocked
-- Router CPU stable
-- Enforcement reversible
+Detection continues in both cases.
 
 ---
 
@@ -232,14 +364,15 @@ sudo cscli decisions delete --ip <IP>
 
 After Phase 3 you have:
 
-- Automated threat containment
-- Edge-level enforcement
-- Behavior-driven blocking
-- A defensible perimeter
+* Network-level automated blocking
+* Application-layer automated blocking
+* Unified decision engine
+* Full observability
+* Reversible enforcement
 
-**Security Level Achieved:** ⭐⭐⭐⭐⭐⭐⭐☆☆☆ (7 / 10)
+**Security Level Achieved:** ⭐⭐⭐⭐⭐⭐⭐⭐☆☆ (8 / 10)
 
 ---
-⬅️ Previous: [Phase 2 - Perimeter Awareness](Phase-2---Perimeter-Awareness.md)  
-➡️ Next: [Phase 4 - Identity & Zero Trust](Phase-4---Identity-&-Zero-Trust.md)
----
+
+⬅️ Previous: Phase 2 — Perimeter Awareness
+➡️ Next: Phase 4 — Identity & Zero Trust
